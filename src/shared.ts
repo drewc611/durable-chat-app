@@ -23,6 +23,10 @@ export type Message =
   | {
       type: "all";
       messages: ChatMessage[];
+    }
+  | {
+      type: "error";
+      error: string;
     };
 
 export const names = [
