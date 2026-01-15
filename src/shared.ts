@@ -3,6 +3,7 @@ export type ChatMessage = {
   content: string;
   user: string;
   role: "user" | "assistant";
+  timestamp: number;
 };
 
 export type Message =
@@ -12,6 +13,7 @@ export type Message =
       content: string;
       user: string;
       role: "user" | "assistant";
+      timestamp: number;
     }
   | {
       type: "update";
@@ -19,10 +21,32 @@ export type Message =
       content: string;
       user: string;
       role: "user" | "assistant";
+      timestamp: number;
+    }
+  | {
+      type: "delete";
+      id: string;
     }
   | {
       type: "all";
       messages: ChatMessage[];
+    }
+  | {
+      type: "error";
+      error: string;
+    }
+  | {
+      type: "typing";
+      user: string;
+      isTyping: boolean;
+    }
+  | {
+      type: "user_joined";
+      user: string;
+    }
+  | {
+      type: "user_left";
+      user: string;
     };
 
 export const names = [
