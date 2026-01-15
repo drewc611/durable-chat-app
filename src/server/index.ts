@@ -25,6 +25,7 @@ export class Chat extends Server<Env> {
 
   messages = [] as ChatMessage[];
   rateLimitMap = new Map<string, RateLimitTracker>();
+  connectedUsers = new Map<string, string>(); // connectionId -> username
 
   broadcastMessage(message: Message, exclude?: string[]) {
     this.broadcast(JSON.stringify(message), exclude);
@@ -90,13 +91,15 @@ export class Chat extends Server<Env> {
 
   onStart() {
     try {
-      // Create the messages table if it doesn't exist
+      // Create the messages table with timestamp if it doesn't exist
       this.ctx.storage.sql.exec(
-        `CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user TEXT, role TEXT, content TEXT)`,
+        `CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user TEXT, role TEXT, content TEXT, timestamp INTEGER)`,
       );
 
       // Load the messages from the database
-      const result = this.ctx.storage.sql.exec(`SELECT * FROM messages`);
+      const result = this.ctx.storage.sql.exec(
+        `SELECT * FROM messages ORDER BY timestamp ASC`,
+      );
       this.messages = result.toArray() as ChatMessage[];
 
       // If we have too many messages, prune old ones
@@ -132,6 +135,34 @@ export class Chat extends Server<Env> {
     }
   }
 
+  onClose(connection: Connection) {
+    try {
+      const username = this.connectedUsers.get(connection.id);
+      if (username) {
+        this.connectedUsers.delete(connection.id);
+        this.broadcastMessage({
+          type: "user_left",
+          user: username,
+        } satisfies Message);
+      }
+    } catch (error) {
+      console.error("Error in onClose:", error);
+    }
+  }
+
+  deleteMessage(messageId: string) {
+    try {
+      // Remove from in-memory array
+      this.messages = this.messages.filter((m) => m.id !== messageId);
+
+      // Delete from database
+      this.ctx.storage.sql.exec(`DELETE FROM messages WHERE id = ?`, messageId);
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      throw error;
+    }
+  }
+
   saveMessage(message: ChatMessage) {
     try {
       // Validate the message
@@ -163,12 +194,14 @@ export class Chat extends Server<Env> {
 
       // Use parameterized queries to prevent SQL injection
       this.ctx.storage.sql.exec(
-        `INSERT INTO messages (id, user, role, content) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET content = ?`,
+        `INSERT INTO messages (id, user, role, content, timestamp) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET content = ?, timestamp = ?`,
         message.id,
         message.user,
         message.role,
         message.content,
+        message.timestamp,
         message.content,
+        message.timestamp,
       );
     } catch (error) {
       console.error("Error saving message:", error);
@@ -204,7 +237,7 @@ export class Chat extends Server<Env> {
         return;
       }
 
-      // Validate and save the message
+      // Handle different message types
       if (parsed.type === "add" || parsed.type === "update") {
         try {
           this.saveMessage(parsed);
@@ -222,6 +255,28 @@ export class Chat extends Server<Env> {
             }),
           );
         }
+      } else if (parsed.type === "delete") {
+        try {
+          this.deleteMessage(parsed.id);
+          // Broadcast the delete to all clients
+          this.broadcast(message);
+        } catch (error) {
+          console.error("Error deleting message:", error);
+          connection.send(
+            JSON.stringify({
+              type: "error",
+              error: "Failed to delete message",
+            }),
+          );
+        }
+      } else if (parsed.type === "typing") {
+        // Broadcast typing indicator to others (not rate limited)
+        this.broadcast(message, [connection.id]);
+      } else if (parsed.type === "user_joined") {
+        // Track the user
+        this.connectedUsers.set(connection.id, parsed.user);
+        // Broadcast to all others
+        this.broadcast(message, [connection.id]);
       }
     } catch (error) {
       console.error("Error in onMessage:", error);

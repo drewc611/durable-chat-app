@@ -6,7 +6,10 @@ const MAX_MESSAGE_LENGTH = 5000;
 const MAX_USERNAME_LENGTH = 50;
 
 // Validation function extracted for testing
-function validateMessage(message: ChatMessage): { valid: boolean; error?: string } {
+function validateMessage(message: ChatMessage): {
+  valid: boolean;
+  error?: string;
+} {
   if (!message.id || typeof message.id !== "string") {
     return { valid: false, error: "Invalid message ID" };
   }
@@ -51,6 +54,7 @@ describe("Message Validation", () => {
       user: "Alice",
       role: "user",
       content: "Hello, world!",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -64,6 +68,7 @@ describe("Message Validation", () => {
       user: "Alice",
       role: "user" as const,
       content: "Hello",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -77,6 +82,7 @@ describe("Message Validation", () => {
       user: "",
       role: "user" as const,
       content: "Hello",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -90,6 +96,7 @@ describe("Message Validation", () => {
       user: "a".repeat(51),
       role: "user",
       content: "Hello",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -103,6 +110,7 @@ describe("Message Validation", () => {
       user: "Alice",
       role: "user",
       content: "   ",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -116,6 +124,7 @@ describe("Message Validation", () => {
       user: "Alice",
       role: "user",
       content: "a".repeat(5001),
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -127,9 +136,10 @@ describe("Message Validation", () => {
     const message = {
       id: "test-123",
       user: "Alice",
-      role: "admin" as any,
+      role: "admin" as "user" | "assistant",
       content: "Hello",
-    };
+      timestamp: Date.now(),
+    } as ChatMessage;
 
     const result = validateMessage(message);
     expect(result.valid).toBe(false);
@@ -142,6 +152,7 @@ describe("Message Validation", () => {
       user: "Alice",
       role: "user",
       content: "a".repeat(5000),
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -154,6 +165,7 @@ describe("Message Validation", () => {
       user: "Assistant",
       role: "assistant",
       content: "How can I help?",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -168,6 +180,7 @@ describe("SQL Injection Prevention", () => {
       user: "Alice",
       role: "user",
       content: "It's a beautiful day",
+      timestamp: Date.now(),
     };
 
     const result = validateMessage(message);
@@ -180,6 +193,7 @@ describe("SQL Injection Prevention", () => {
       user: "'; DROP TABLE messages; --",
       role: "user",
       content: "Hello",
+      timestamp: Date.now(),
     };
 
     // Validation should pass (parameterized queries handle the SQL safety)
@@ -193,6 +207,7 @@ describe("SQL Injection Prevention", () => {
       user: "Alice",
       role: "user",
       content: "'; DELETE FROM messages WHERE '1'='1",
+      timestamp: Date.now(),
     };
 
     // Validation should pass (parameterized queries handle the SQL safety)
